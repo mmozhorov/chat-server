@@ -1,0 +1,19 @@
+{
+	email {$LETSENCRYPT_EMAIL}
+}
+
+{$SITE_HOSTNAME} {
+	encode gzip
+
+	# Mattermost mobile app uploads can be large
+	request_body {
+		max_size 100MB
+	}
+
+	reverse_proxy mattermost:8065 {
+		header_up X-Forwarded-Proto https
+		transport http {
+			read_timeout 360s
+		}
+	}
+}
