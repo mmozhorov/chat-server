@@ -21,14 +21,55 @@ App Store / Google Play, без посредников. Запускается �
 - Желательно: провайдер не в РФ/РБ, иначе домен/IP могут блокироваться.
   Подойдут Hetzner (DE/FI), Scaleway (FR), DigitalOcean, Vultr, Time4VPS и т.п.
 
-## Как развернуть с нуля
+## Развёртывание на сервере, где УЖЕ что-то крутится (VPN, бот и т.п.)
+
+**Если на сервере уже работают другие сервисы — сначала прогони
+`preflight.sh`**, он покажет, не будут ли конфликты:
+
+```bash
+git clone <URL этого репо> chat-server && cd chat-server
+sudo bash preflight.sh
+```
+
+Скрипт ничего не меняет, только читает. Он покажет:
+- что уже слушает 80/443 (Caddy для Mattermost их хочет);
+- какие сервисы VPN/прокси активны;
+- статус ufw/iptables.
+
+**Если 80/443 уже заняты** (например, на сервере nginx или VPN-панель типа
+3x-ui/x-ui/marzban) — есть варианты:
+
+1. **Поставить Mattermost за тот же реверс-прокси, что уже стоит.**
+   Самый правильный путь. Выкини сервис `caddy` из `docker-compose.yml`,
+   проброс порта Mattermost наружу (например, `127.0.0.1:8065:8065`)
+   и добавь location в свой существующий nginx/caddy.
+2. **Сменить порты в `.env`** на нестандартные, например `HTTPS_PORT=8443`.
+   Минус: iOS-клиент Mattermost подключится по `https://host:8443`, и
+   Let's Encrypt не выпустит сертификат по HTTP-01 (нужен публичный 80) —
+   придётся DNS-01 или свой домен за CDN.
+3. **Поднять чат на втором IP**, если у VPS их несколько.
+
+**Не делай этого на работающем сервере:**
+- `ufw --force enable` — может выкинуть тебя по SSH, если нет allow для 22.
+- `iptables -F` — то же самое.
+- `docker system prune -a` — снесёт образы чужих контейнеров.
+
+Базы данных Postgres, тома Docker и сети у нашего стека свои
+(`chat-server_default`, `./volumes/...`), с чужими не пересекаются.
+
+## Как развернуть с нуля (чистый VPS)
 
 ### 1. Подготовь VPS
 
 ```bash
 # Под root или через sudo
-apt update && apt install -y docker.io docker-compose-v2 ufw
+apt update && apt install -y docker.io docker-compose-v2
 systemctl enable --now docker
+
+# Файрвол ставь ТОЛЬКО если его ещё нет. Если на сервере уже работает
+# VPN/бот без ufw — не включай ufw, чтобы не сломать им сеть.
+# Для чистого сервера:
+apt install -y ufw
 ufw allow OpenSSH
 ufw allow 80/tcp
 ufw allow 443/tcp
